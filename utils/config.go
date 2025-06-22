@@ -7,11 +7,13 @@ import (
 )
 
 type Config struct {
-	DBPath  string `json:"db_path"`
-	ApiKey  string `json:"api_key"`
-	PostDir string `json:"post_directory"`
-	ImgDir  string `json:"image_directory"`
-	RootID  string `json:"root_id"`
+	DBPath      string `json:"db_path"`
+	ApiKey      string `json:"api_key"`
+	PostDir     string `json:"post_directory"`
+	ImgDir      string `json:"image_directory"`
+	RootID      string `json:"root_id"`
+	GitHubToken string `json:"github_token"`
+	GitHubRepo  string `json:"github_repo"`
 }
 
 func ReadConfig(configPath string) (*Config, error) {

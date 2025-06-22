@@ -3,14 +3,16 @@ package notion
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/shinychan95/make-notion-blog/utils"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/shinychan95/Chan/utils"
 )
 
 type ImageBlock struct {
@@ -20,12 +22,15 @@ type ImageBlock struct {
 	LastEditedTime time.Time `json:"last_edited_time"`
 	Type           string    `json:"type"`
 	Image          struct {
-		Type string `json:"type"`
-		File struct {
-			URL        string    `json:"url"`
-			ExpiryTime time.Time `json:"expiry_time"`
-		} `json:"file"`
+		Type     string `json:"type"`
+		File     ImageFile
+		External ImageFile
 	} `json:"image"`
+}
+
+type ImageFile struct {
+	URL        string    `json:"url"`
+	ExpiryTime time.Time `json:"expiry_time,omitempty"`
 }
 
 func SaveImageIfNotExist(rootID, imageId string, wg *sync.WaitGroup, errCh chan error) string {
@@ -40,12 +45,10 @@ func SaveImageIfNotExist(rootID, imageId string, wg *sync.WaitGroup, errCh chan 
 	if !checkImageExist(imagePath) {
 		go func(url, path string) {
 			defer wg.Done()
-			fmt.Printf("Downloading image: %s\n", url) // 이미지 다운로드 시작 메시지 출력
 			err = downloadImage(url, path)
 			if err != nil {
 				errCh <- err
-			} else {
-				fmt.Printf("Image downloaded: %s\n", path) // 이미지 다운로드 완료 메시지 출력
+				log.Printf("Error downloading image: %s", err)
 			}
 		}(imageURL, imagePath)
 	} else {
@@ -106,7 +109,14 @@ func getImageURL(blockID string) (string, error) {
 		return "", err
 	}
 
-	return imageBlock.Image.File.URL, nil
+	if imageBlock.Image.Type == "file" {
+		return imageBlock.Image.File.URL, nil
+	}
+	if imageBlock.Image.Type == "external" {
+		return imageBlock.Image.External.URL, nil
+	}
+
+	return "", fmt.Errorf("unsupported image type or empty URL for block %s", blockID)
 }
 
 func checkImageExist(imagePath string) bool {

@@ -5,19 +5,19 @@ import (
 	"strings"
 )
 
-func Header(indent, text string) string {
-	return fmt.Sprintf("%s# %s\n\n", indent, text)
+func Header(indent string, text string, anchor string) string {
+	return fmt.Sprintf("\n<h1 id=\"%s\">%s</h1>\n", anchor, text)
 }
 
-func SubHeader(indent, text string) string {
-	return fmt.Sprintf("%s## %s\n\n", indent, text)
+func SubHeader(indent string, text string, anchor string) string {
+	return fmt.Sprintf("\n<h2 id=\"%s\">%s</h2>\n", anchor, text)
 }
 
-func SubSubHeader(indent, text string) string {
-	return fmt.Sprintf("%s### %s\n", indent, text)
+func SubSubHeader(indent string, text string, anchor string) string {
+	return fmt.Sprintf("\n<h3 id=\"%s\">%s</h3>\n", anchor, text)
 }
 
-func Text(indent, text string) string {
+func Text(indent string, text string) string {
 	if text == "" {
 		text = "<br/>\n\n"
 	}
@@ -59,9 +59,16 @@ func Image(indent, imagePath string) string {
 	return fmt.Sprintf("%s![](%s)\n", indent, imagePath)
 }
 
-func ToDo(indent, text string, checked bool) string {
+func ToDo(indent string, text string, checked bool) string {
 	if checked {
 		return fmt.Sprintf("%s- [x] %s\n", indent, text)
 	}
 	return fmt.Sprintf("%s- [ ] %s\n", indent, text)
+}
+
+func Bookmark(indent, url, title string) string {
+	if title == "" {
+		title = url
+	}
+	return fmt.Sprintf("%s> 🔗 [%s](%s)\n", indent, title, url)
 }

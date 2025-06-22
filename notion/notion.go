@@ -3,7 +3,9 @@ package notion
 import (
 	"database/sql"
 	"encoding/json"
-	"github.com/shinychan95/make-notion-blog/utils"
+	"log"
+
+	"github.com/shinychan95/Chan/utils"
 )
 
 var (
@@ -34,7 +36,9 @@ func Close() {
 //////////////////////
 
 func getCollectionId(rootID string) (colId string) {
-	rows, err := db.Query("SELECT collection_id FROM block WHERE id = ? AND type = 'collection_view_page'", rootID)
+	query := "SELECT collection_id FROM block WHERE id = ? AND type = 'collection_view'"
+	log.Printf("Executing query: %s, with rootID: %s", query, rootID)
+	rows, err := db.Query(query, rootID)
 	utils.CheckError(err)
 	defer rows.Close()
 
@@ -55,7 +59,9 @@ func getCollectionId(rootID string) (colId string) {
 }
 
 func getCollectionSchema(collectionId string) (schemaMap map[string]Schema) {
-	rows, err := db.Query("SELECT schema FROM collection WHERE id = ?", collectionId)
+	query := "SELECT schema FROM collection WHERE id = ?"
+	log.Printf("Executing query: %s, with collectionId: %s", query, collectionId)
+	rows, err := db.Query(query, collectionId)
 	utils.CheckError(err)
 	defer rows.Close()
 
@@ -77,7 +83,9 @@ func getCollectionSchema(collectionId string) (schemaMap map[string]Schema) {
 }
 
 func getPagesWithProperties(parentId string, schema map[string]Schema) (pages []Page) {
-	rows, err := db.Query("SELECT id, properties FROM block WHERE parent_id = ? AND type = 'page' AND is_template IS NULL AND alive = 1", parentId)
+	query := "SELECT id, properties FROM block WHERE parent_id = ? AND type = 'page' AND is_template IS NULL AND alive = 1"
+	log.Printf("Executing query: %s, with parentId: %s", query, parentId)
+	rows, err := db.Query(query, parentId)
 	utils.CheckError(err)
 	defer rows.Close()
 
@@ -99,7 +107,9 @@ func getPagesWithProperties(parentId string, schema map[string]Schema) (pages []
 }
 
 func getRootType(rootID string) (t string) {
-	rows, err := db.Query("SELECT type FROM block WHERE id = ?", rootID)
+	query := "SELECT type FROM block WHERE id = ?"
+	log.Printf("Executing query: %s, with rootID: %s", query, rootID)
+	rows, err := db.Query(query, rootID)
 	utils.CheckError(err)
 	defer rows.Close()
 
@@ -111,17 +121,14 @@ func getRootType(rootID string) (t string) {
 			utils.ExecError("more than one row returned")
 			return
 		}
-
-		return
 	}
-
-	utils.ExecError("root block is not in db")
 
 	return
 }
 
 func getBlockData(blockID string) (block Block) {
-	rows, err := db.Query("SELECT id, type, content, properties, format FROM block WHERE id = ?", blockID)
+	query := "SELECT id, type, content, properties, format FROM block WHERE id = ?"
+	rows, err := db.Query(query, blockID)
 	utils.CheckError(err)
 	defer rows.Close()
 

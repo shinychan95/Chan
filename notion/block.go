@@ -4,12 +4,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/shinychan95/make-notion-blog/markdown"
-	"github.com/shinychan95/make-notion-blog/utils"
 	"log"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/shinychan95/Chan/markdown"
+	"github.com/shinychan95/Chan/utils"
 )
 
 type Block struct {
@@ -50,7 +51,7 @@ func setNumberedListValue(blocks *[]Block) {
 		if (*blocks)[i].Type == "numbered_list" {
 			(*blocks)[i].Number = currentNumber
 			currentNumber++
-			
+
 			setNumberedListValue(&((*blocks)[i].Children))
 		} else {
 			currentNumber = 1
@@ -74,7 +75,45 @@ func extractChildIDs(content sql.NullString) (childIDs []string, err error) {
 // Block 자체 그리고 Type 에 따른 Parse 로직 //
 /////////////////////////////////////////
 
-func ParseBlock(pageID string, block Block, indentLv int, wg *sync.WaitGroup, errCh chan error) string {
+type HeaderInfo struct {
+	Title  string
+	Anchor string
+	Level  int
+}
+
+func CollectHeaders(blocks []Block) []HeaderInfo {
+	var headers []HeaderInfo
+	for _, block := range blocks {
+		level := 0
+		switch block.Type {
+		case "header":
+			level = 1
+		case "sub_header":
+			level = 2
+		case "sub_sub_header":
+			level = 3
+		}
+
+		if level > 0 {
+			title := ParsePropTitle(block.Properties.String)
+			anchor := utils.SanitizeFileName(title)
+
+			headers = append(headers, HeaderInfo{
+				Title:  title,
+				Anchor: anchor,
+				Level:  level,
+			})
+		}
+
+		// 재귀적으로 자식 블록 탐색
+		if len(block.Children) > 0 {
+			headers = append(headers, CollectHeaders(block.Children)...)
+		}
+	}
+	return headers
+}
+
+func ParseBlock(pageID string, block Block, indentLv int, headers []HeaderInfo, wg *sync.WaitGroup, errCh chan error) string {
 	var output string
 
 	if block.Properties.String != "" {
@@ -85,13 +124,18 @@ func ParseBlock(pageID string, block Block, indentLv int, wg *sync.WaitGroup, er
 	indent := strings.Repeat("   ", indentLv)
 	text := strings.ReplaceAll(block.ParsedProp.Title, "\n", "\n"+indent)
 
+	anchor := ""
+	if block.Type == "header" || block.Type == "sub_header" || block.Type == "sub_sub_header" {
+		anchor = utils.SanitizeFileName(text)
+	}
+
 	switch block.Type {
 	case "header":
-		output = markdown.Header(indent, text)
+		output = markdown.Header(indent, text, anchor)
 	case "sub_header":
-		output = markdown.SubHeader(indent, text)
+		output = markdown.SubHeader(indent, text, anchor)
 	case "sub_sub_header":
-		output = markdown.SubSubHeader(indent, text)
+		output = markdown.SubSubHeader(indent, text, anchor)
 	case "text":
 		output = markdown.Text(indent, text)
 	case "code":
@@ -105,7 +149,7 @@ func ParseBlock(pageID string, block Block, indentLv int, wg *sync.WaitGroup, er
 	case "toggle":
 		var content string
 		for _, child := range block.Children {
-			content += ParseBlock(pageID, child, indentLv+1, wg, errCh)
+			content += ParseBlock(pageID, child, indentLv+1, headers, wg, errCh)
 		}
 		output = markdown.Toggle(indent, text, content)
 		block.Children = nil
@@ -121,13 +165,42 @@ func ParseBlock(pageID string, block Block, indentLv int, wg *sync.WaitGroup, er
 	case "table":
 		output = createTableMarkdown(&block, block.Children)
 		block.Children = nil
+	case "column_list":
+		var content string
+		for _, child := range block.Children {
+			// 컬럼 리스트의 자식(컬럼)은 들여쓰기를 추가하지 않음
+			content += ParseBlock(pageID, child, indentLv, headers, wg, errCh)
+		}
+		output = content
+		block.Children = nil // 자식 블록은 이미 처리되었으므로 nil로 설정
+	case "column":
+		var content string
+		for _, child := range block.Children {
+			// 컬럼 내의 블록은 들여쓰기를 추가하지 않음
+			content += ParseBlock(pageID, child, indentLv, headers, wg, errCh)
+		}
+		output = content
+		block.Children = nil
+	case "table_of_contents":
+		var tocBuilder strings.Builder
+		for _, h := range headers {
+			tocIndent := strings.Repeat("  ", h.Level-1)
+			escapedTitle := strings.ReplaceAll(h.Title, "|", "\\|")
+			tocBuilder.WriteString(fmt.Sprintf("%s- [%s](#%s)\n", tocIndent, escapedTitle, h.Anchor))
+		}
+		output = tocBuilder.String()
+	case "bookmark":
+		url, title, _ := ParseBookmark(block.Properties.String)
+		output = markdown.Bookmark(indent, url, title)
 	default:
-		log.Printf("Unsupported block type: %s", block.Type)
+		if block.Type != "" {
+			log.Printf("Unsupported block type: %s", block.Type)
+		}
 		output = ""
 	}
 
 	for _, child := range block.Children {
-		output += ParseBlock(pageID, child, indentLv+1, wg, errCh)
+		output += ParseBlock(pageID, child, indentLv+1, headers, wg, errCh)
 	}
 
 	return output
@@ -217,4 +290,24 @@ func ParseChecked(properties string) bool {
 	checkedValue := checkedData[0].([]interface{})[0].(string)
 
 	return checkedValue == "Yes"
+}
+
+func ParseBookmark(properties string) (url string, title string, description string) {
+	var propData map[string]interface{}
+	if err := json.Unmarshal([]byte(properties), &propData); err != nil {
+		return "", "", ""
+	}
+
+	if link, ok := propData["link"]; ok {
+		url = link.([]interface{})[0].([]interface{})[0].(string)
+	}
+
+	if titleArray, ok := propData["title"]; ok {
+		title = titleArray.([]interface{})[0].([]interface{})[0].(string)
+	}
+
+	if descriptionArray, ok := propData["description"]; ok {
+		description = descriptionArray.([]interface{})[0].([]interface{})[0].(string)
+	}
+	return
 }

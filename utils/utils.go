@@ -24,15 +24,19 @@ func SliceToString(s []string, transformFn func(string) string) string {
 }
 
 func SanitizeFileName(filename string) string {
-	// 파일 이름에 사용할 수 없는 문자를 정규식으로 정의
-	reg, err := regexp.Compile(`[<>:"/\\|?*]`)
+	// Jekyll/Kramdown의 헤더 ID 생성 규칙에 맞게 수정
+	// 1. 알파벳, 숫자, 한글, 공백을 제외한 모든 특수문자 제거
+	reg, err := regexp.Compile(`[^\p{L}\p{N}\s]`)
 	if err != nil {
 		panic(err)
 	}
-
-	// 파일 이름에서 유효하지 않은 문자를 제거하고 공백을 하이픈(-)으로 대체
 	sanitized := reg.ReplaceAllString(filename, "")
+
+	// 2. 공백을 하이픈(-)으로 대체
 	sanitized = strings.ReplaceAll(sanitized, " ", "-")
+
+	// 3. 소문자로 변환
+	sanitized = strings.ToLower(sanitized)
 
 	return sanitized
 }

@@ -1,20 +1,26 @@
 package notion
 
 import (
-	"github.com/shinychan95/make-notion-blog/utils"
 	"sync"
+
+	"github.com/shinychan95/Chan/utils"
 )
 
-type Schema struct {
-	Name      string              `json:"name"`
-	Type      string              `json:"type"`
-	Options   []map[string]string `json:"options,omitempty"`
-	OptionIds []string            `json:"optionIds,omitempty"`
+type SchemaOption struct {
+	ID    string `json:"id"`
+	Value string `json:"value"`
+	Color string `json:"color"`
 }
 
-func HandleCollectionViewPage(rootId string, wg *sync.WaitGroup, errCh chan error) {
+type Schema struct {
+	Name    string         `json:"name"`
+	Type    string         `json:"type"`
+	Options []SchemaOption `json:"options,omitempty"`
+}
+
+func HandleCollectionView(rootId string, wg *sync.WaitGroup, errCh chan error) {
 	rootType := getRootType(rootId)
-	if rootType != "collection_view_page" {
+	if rootType != "collection_view" {
 		Close() // db close
 		utils.ExecError("block type is not same with exec type")
 	}
@@ -30,7 +36,7 @@ func HandleCollectionViewPage(rootId string, wg *sync.WaitGroup, errCh chan erro
 
 	// property 내 Status 가 Drafting 인 글들만 프로세스를 실행한다.
 	for _, page := range pages {
-		if page.Status == "Published" {
+		if page.Status == "Published" || page.Status == "Archived" {
 			wg.Add(1)
 			go func(page Page) {
 				handlePage(page, wg, errCh)

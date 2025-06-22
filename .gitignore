@@ -2,5 +2,66 @@
 *.png
 .idea
 
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+
+# 빌드 디렉토리
+build/
+
+# macOS 앱 번들
+*.app
+
+# 기조 바이너리 (레거시)
 make-notion-blog
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# 로그 파일
+*.log
+
+# 임시 파일
+*.tmp
+*.temp
+
 config.json
+
+# 스크립트 실행 로그
+scripts/*.log
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+
+# Build artifacts
+build/
+*.app
+
+# Application specific
+chan

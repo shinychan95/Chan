@@ -3,13 +3,15 @@ package notion
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/shinychan95/make-notion-blog/utils"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/shinychan95/Chan/utils"
 )
 
 type Page struct {
@@ -61,9 +63,12 @@ func handlePage(page Page, wg *sync.WaitGroup, errCh chan error) {
 	// 내부 헤더
 	markdownOutput += page.GetMetaString() + "\n"
 
+	// Table of Contents 생성을 위해 헤더 정보 수집
+	headers := CollectHeaders(pageBlock.Children)
+
 	// 내부 컨텐츠
 	for _, block := range pageBlock.Children {
-		markdownOutput += ParseBlock(page.ID, block, 0, wg, errCh)
+		markdownOutput += ParseBlock(page.ID, block, 0, headers, wg, errCh)
 	}
 
 	if _, err := os.Stat(PostDir); os.IsNotExist(err) {
@@ -77,7 +82,7 @@ func handlePage(page Page, wg *sync.WaitGroup, errCh chan error) {
 	err := ioutil.WriteFile(markdownFilePath, []byte(markdownOutput), 0644)
 	utils.CheckError(err)
 
-	fmt.Printf("Markdown file saved: %s\n", markdownFilePath)
+	log.Printf("📄 Page saved: %s (%s)", page.Title, markdownFilePath)
 }
 
 func parsePageProperties(page *Page, rawProperties string, schema map[string]Schema) {
@@ -89,15 +94,19 @@ func parsePageProperties(page *Page, rawProperties string, schema map[string]Sch
 	page.Author = "chanyoung.kim"
 
 	for key, value := range propertiesMap {
-		schemaValue := schema[key]
+		schemaInfo := schema[key]
 		propertyValue := value[0]
 
-		switch schemaValue.Name {
+		switch schemaInfo.Name {
 		case "Categories":
+			// `block` 테이블의 `properties`에는 옵션의 '값'이 쉼표로 구분된 문자열로 저장되어 있습니다.
+			// 예: [["Value1,Value2"]]
 			page.Categories = strings.Split(propertyValue[0].(string), ",")
 		case "Tags":
 			page.Tags = strings.Split(propertyValue[0].(string), ",")
 		case "Status":
+			// `block` 테이블의 `properties`에는 상태의 '값'이 직접 저장되어 있습니다.
+			// 예: [["Archived"]]
 			page.Status = propertyValue[0].(string)
 		case "Title":
 			page.Title = propertyValue[0].(string)
