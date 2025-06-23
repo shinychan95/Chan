@@ -9,10 +9,24 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/shinychan95/Chan/utils"
 )
+
+// 글로벌 카운터 (글 번호 생성용)
+var postCounter int64 = 0
+
+// ResetPostCounter 카운터를 리셋합니다 (테스트용)
+func ResetPostCounter() {
+	atomic.StoreInt64(&postCounter, 0)
+}
+
+// GetPostCounter 현재 카운터 값을 반환합니다 (테스트용)
+func GetPostCounter() int64 {
+	return atomic.LoadInt64(&postCounter)
+}
 
 type Page struct {
 	ID         string
@@ -25,12 +39,25 @@ type Page struct {
 	Published  time.Time
 }
 
+// escapeYAMLString YAML에서 특수문자를 적절히 이스케이프합니다
+func escapeYAMLString(s string) string {
+	// 이미 따옴표로 감싸져 있거나 특수문자가 없는 경우 그대로 반환
+	if !strings.ContainsAny(s, ":\"'\\\n\r\t") && !strings.HasPrefix(s, " ") && !strings.HasSuffix(s, " ") {
+		return s
+	}
+
+	// 따옴표를 이스케이프하고 전체를 큰따옴표로 감싸기
+	escaped := strings.ReplaceAll(s, `"`, `\"`)
+	return fmt.Sprintf(`"%s"`, escaped)
+}
+
 func (pg *Page) GetMetaString() string {
 	var sb strings.Builder
 
 	sb.WriteString("---\n")
 
-	sb.WriteString(fmt.Sprintf("title: %s\n", pg.Title))
+	// title을 YAML에 안전하게 삽입
+	sb.WriteString(fmt.Sprintf("title: %s\n", escapeYAMLString(pg.Title)))
 	sb.WriteString(fmt.Sprintf("author: %s\n", pg.Author))
 	sb.WriteString(fmt.Sprintf("date: %s\n", pg.Published.Format("2006-01-02 15:04:05 -0700")))
 
@@ -93,6 +120,10 @@ func parsePageProperties(page *Page, rawProperties string, schema map[string]Sch
 	// INFO - Author 의 경우, static 하게 입력한다.
 	page.Author = "chanyoung.kim"
 
+	// 기본값 설정
+	page.Published = time.Now()                                          // 현재 시간을 기본값으로 설정
+	page.Path = fmt.Sprintf("post-%d", atomic.AddInt64(&postCounter, 1)) // 글 번호를 기본값으로 설정
+
 	for key, value := range propertiesMap {
 		schemaInfo := schema[key]
 		propertyValue := value[0]
@@ -111,7 +142,10 @@ func parsePageProperties(page *Page, rawProperties string, schema map[string]Sch
 		case "Title":
 			page.Title = propertyValue[0].(string)
 		case "Path":
-			page.Path = propertyValue[0].(string)
+			// Path가 비어있지 않은 경우에만 설정
+			if pathValue := propertyValue[0].(string); pathValue != "" {
+				page.Path = pathValue
+			}
 		case "Published":
 			dateProperty := propertyValue[1].([]interface{})[0].([]interface{})[1].(map[string]interface{})
 			dateString := dateProperty["start_date"].(string)
