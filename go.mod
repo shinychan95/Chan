@@ -1,6 +1,6 @@
 module github.com/shinychan95/Chan
 
-go 1.18
+go 1.24
 
 require (
 	fyne.io/fyne/v2 v2.6.1

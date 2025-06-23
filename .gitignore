@@ -1,5 +1,4 @@
 *.md
-*.png
 .idea
 
 # Go
@@ -17,9 +16,6 @@ build/
 
 # macOS 앱 번들
 *.app
-
-# 기조 바이너리 (레거시)
-make-notion-blog
 
 # macOS
 .DS_Store
@@ -64,4 +60,4 @@ build/
 *.app
 
 # Application specific
-chan
+Chan

@@ -33,6 +33,15 @@ Notion의 다양한 블록 타입(표, 이미지, callout, toggle, 컬럼 레이
 
 ## 🚀 빠른 시작
 
+### 시스템 요구사항
+
+- **macOS**: 10.15 (Catalina) 이상
+- **Go**: 1.24.4 이상 (권장)
+- **Xcode Command Line Tools**: 최신 버전
+- **Notion 앱**: 데스크톱 버전 설치 필요
+
+> ⚠️ **중요**: Go 1.21.10 이하 버전에서는 트레이 아이콘 표시 문제가 발생할 수 있습니다. Go 1.24.4 이상 사용을 강력히 권장합니다.
+
 ### 1. 설치
 
 ```bash
@@ -232,6 +241,44 @@ Chan/
 5. **Status 필터**: "Drafting" 상태의 페이지만 동기화됨
 
 ## 🔧 문제 해결
+
+### Go 버전 관련 문제
+
+#### 트레이 아이콘이 표시되지 않거나 "Killed: 9" 오류 발생
+**원인**: Go 1.21.10 이하 버전과 CGO/Objective-C 호환성 문제
+
+**해결 방법**:
+```bash
+# Homebrew로 Go 업그레이드
+brew install go
+
+# PATH 업데이트 (현재 세션)
+export PATH="/opt/homebrew/bin:$PATH"
+
+# 영구 적용
+echo 'export PATH="/opt/homebrew/bin:$PATH"' >> ~/.zshrc
+
+# 버전 확인
+go version  # go1.24.4 이상이어야 함
+
+# 프로젝트 다시 빌드
+make clean && make install
+```
+
+#### `-lobjc` 링커 경고 (Xcode 15+)
+**증상**: `ld: warning: ignoring duplicate libraries: '-lobjc'`
+**원인**: Xcode 15의 새로운 링커가 중복 라이브러리에 대해 경고 표시
+**상태**: 기능상 문제없음, 무시해도 됨
+
+**경고 숨기기** (선택사항):
+```bash
+# 환경변수로 설정
+export CGO_LDFLAGS="-Wl,-no_warn_duplicate_libraries"
+make build
+
+# 또는 Makefile 수정
+CGO_LDFLAGS += -Wl,-no_warn_duplicate_libraries
+```
 
 ### 메뉴바 아이콘이 보이지 않는 경우
 1. **메뉴바 정리**: 불필요한 메뉴바 앱 제거
