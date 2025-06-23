@@ -15,7 +15,7 @@ all: build-app
 # 바이너리 빌드
 build:
 	@echo "🦤 바이너리 빌드 중..."
-	go build -o $(APP_NAME) .
+	CC=clang CGO_ENABLED=1 go build -o $(APP_NAME) .
 	@echo "✅ 바이너리 빌드 완료: $(APP_NAME)"
 
 # macOS 앱 번들 생성
@@ -24,7 +24,10 @@ build-app: build
 	@mkdir -p $(BUILD_DIR)
 	"$(shell go env GOPATH)/bin/fyne" package -os darwin -icon assets/dodo.png .
 	@echo "🔧 생성된 .app 파일을 $(BUILD_DIR)로 이동 중..."
+	@if [ -d "$(BUILD_DIR)/$(APP_NAME).app" ]; then rm -rf "$(BUILD_DIR)/$(APP_NAME).app"; fi
 	@mv "Chan.app" "$(BUILD_DIR)/$(APP_NAME).app"
+	@echo "🔧 Info.plist 수정 중 (백그라운드 앱 설정)..."
+	@plutil -insert LSBackgroundOnly -bool true "$(BUILD_DIR)/$(APP_NAME).app/Contents/Info.plist"
 	@echo "✅ macOS 앱 번들 생성 완료: $(BUILD_DIR)/$(APP_NAME).app"
 
 # 앱 번들 설치 (Applications 폴더로 복사)
@@ -69,7 +72,7 @@ help:
 	@echo ""
 	@echo "사용 가능한 명령어:"
 	@echo "  make build        - 바이너리 빌드"
-	@echo "  make build-app    - macOS 앱 번들 생성 (LSUIElement 포함)"
+	@echo "  make build-app    - macOS 앱 번들 생성 (백그라운드 앱)"
 	@echo "  make install-app  - 앱 번들을 Applications에 설치"
 	@echo "  make run-app      - 앱 번들 실행"
 	@echo "  make run-binary   - 바이너리 직접 실행"

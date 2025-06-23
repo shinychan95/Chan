@@ -5,12 +5,10 @@ package main
 #cgo LDFLAGS: -framework Cocoa
 #import <Cocoa/Cocoa.h>
 
-void setAccessoryMode() {
-    [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
-}
-
-void setRegularMode() {
-    [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+void forceAccessoryModeEarly() {
+    // NSApplication이 아직 생성되지 않았다면 생성하고 즉시 Accessory 모드로 설정
+    NSApplication *app = [NSApplication sharedApplication];
+    [app setActivationPolicy:NSApplicationActivationPolicyAccessory];
 }
 */
 import "C"
@@ -46,32 +44,40 @@ var (
 	mainWindow       fyne.Window
 	windowMutex      sync.Mutex
 	autoStartEnabled bool
+	forceQuit        bool // 강제 종료 플래그
 )
 
 func main() {
-	// macOS에서 시작 시 트레이 전용 모드로 설정
+	// macOS에서 NSApplication 생성과 동시에 즉시 Accessory 모드 적용
 	switch runtime.GOOS {
 	case "darwin":
-		C.setAccessoryMode()
+		C.forceAccessoryModeEarly() // 핵심 해결책
 	}
 
 	fyneApp = app.NewWithID("com.shinychan95.Chan")
 	fyneApp.SetIcon(resourceDodoPng)
 	checkAutoStartStatus()
 
-	// 앱 생명주기 관리 - 모든 윈도우가 닫혀도 앱 종료 방지
-	fyneApp.Lifecycle().SetOnExitedForeground(func() {
-		// 포그라운드에서 나가도 앱을 종료하지 않음
-		// 트레이 메뉴에서 "종료"를 선택해야만 종료됨
+	// 앱 생명주기 관리
+	fyneApp.Lifecycle().SetOnStopped(func() {
+		if !forceQuit {
+			log.Println("앱 종료 시도가 감지되었습니다. 트레이에서만 종료 가능합니다.")
+			showNotification("알림", "앱을 종료하려면 메뉴바에서 'Quit'을 선택해주세요.")
+			return
+		}
+		log.Println("앱이 정상적으로 종료됩니다.")
 	})
 
-	// 설정 로드
-	loadConfiguration()
+	// 트레이 아이콘 설정
+	if desk, ok := fyneApp.(desktop.App); ok {
+		desk.SetSystemTrayIcon(resourceDodoPng)
+	}
 
-	// 트레이 메뉴 설정
+	// 설정 로드 및 트레이 메뉴 설정
+	loadConfiguration()
 	refreshTrayMenu()
 
-	// 앱 실행 (트레이 전용 모드)
+	// 앱 실행
 	fyneApp.Run()
 }
 
@@ -95,6 +101,7 @@ func refreshTrayMenu() {
 		}
 
 		menuItems = append(menuItems, fyne.NewMenuItemSeparator(), fyne.NewMenuItem("Quit", func() {
+			forceQuit = true // 강제 종료 플래그 설정
 			fyneApp.Quit()
 		}))
 
@@ -108,12 +115,6 @@ func showMainWindow() {
 	windowMutex.Lock()
 	defer windowMutex.Unlock()
 
-	// macOS에서 창을 열 때 Regular 모드로 전환 (Dock에 나타남)
-	switch runtime.GOOS {
-	case "darwin":
-		C.setRegularMode()
-	}
-
 	if mainWindow == nil {
 		mainWindow = fyneApp.NewWindow("Chan")
 		mainWindow.Resize(fyne.NewSize(600, 500))
@@ -121,10 +122,12 @@ func showMainWindow() {
 		mainWindow.SetContent(createSettingsUI(mainWindow))
 		mainWindow.SetCloseIntercept(func() {
 			mainWindow.Hide()
-			// macOS에서 창을 닫을 때 Accessory 모드로 복귀 (Dock에서 사라짐)
-			switch runtime.GOOS {
-			case "darwin":
-				C.setAccessoryMode()
+		})
+
+		// ESC 키로 창 닫기
+		mainWindow.Canvas().SetOnTypedKey(func(ke *fyne.KeyEvent) {
+			if ke.Name == fyne.KeyEscape {
+				mainWindow.Hide()
 			}
 		})
 	}
