@@ -252,6 +252,28 @@ func (bs *BlogSyncer) gitCommitAndPush() error {
 		log.Printf("Warning: git config http.lowSpeedTime 실패: %v", err)
 	}
 
+	// GitHub 토큰이 설정되어 있으면 원격 URL을 업데이트
+	if bs.config.GitHubToken != "" && bs.config.GitHubRepo != "" {
+		// 표준 형식으로 원격 URL 설정 (문서 권장 방식)
+		remoteURL := fmt.Sprintf("https://%s@github.com/%s.git", bs.config.GitHubToken, bs.config.GitHubRepo)
+		cmd = exec.Command("git", "remote", "set-url", "origin", remoteURL)
+		cmd.Dir = repoPath
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("git remote set-url 실패: %w", err)
+		}
+	}
+
+	// git pull - 원격 저장소의 최신 변경사항 가져오기
+	cmd = exec.Command("git", "pull", "origin", "main")
+	cmd.Dir = repoPath
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// pull 실패 시에도 계속 진행 (로컬 변경사항이 우선일 수 있음)
+		log.Printf("Warning: git pull 실패 (계속 진행): %v\n%s", err, string(output))
+	} else {
+		log.Printf("git pull 성공: %s", string(output))
+	}
+
 	// git add .
 	cmd = exec.Command("git", "add", ".")
 	cmd.Dir = repoPath
@@ -272,21 +294,10 @@ func (bs *BlogSyncer) gitCommitAndPush() error {
 		return nil
 	}
 
-	// GitHub 토큰이 설정되어 있으면 원격 URL을 업데이트
-	if bs.config.GitHubToken != "" && bs.config.GitHubRepo != "" {
-		// 표준 형식으로 원격 URL 설정 (문서 권장 방식)
-		remoteURL := fmt.Sprintf("https://%s@github.com/%s.git", bs.config.GitHubToken, bs.config.GitHubRepo)
-		cmd = exec.Command("git", "remote", "set-url", "origin", remoteURL)
-		cmd.Dir = repoPath
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("git remote set-url 실패: %w", err)
-		}
-	}
-
 	// git push (큰 파일 처리를 위한 추가 옵션 포함)
 	cmd = exec.Command("git", "push", "--verbose")
 	cmd.Dir = repoPath
-	output, err := cmd.CombinedOutput()
+	output, err = cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git push 실패: %w\n%s", err, string(output))
 	}
